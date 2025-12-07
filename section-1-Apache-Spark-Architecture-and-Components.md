@@ -312,10 +312,10 @@ The Cluster Manager manages the set of machines (the cluster) where your Spark a
 ### DataFrame and Dataset Concepts
 
 #### DataFrames
-```python
-# DataFrame is a distributed collection of data organized into named columns
-# Similar to a table in relational database
 
+DataFrame is a distributed in-memory collection of data organized into named columns similar to a table in relational database.
+
+```python
 from pyspark.sql import SparkSession
 
 spark = SparkSession.builder.appName("Example").getOrCreate()
@@ -338,17 +338,14 @@ df.show()
 ```
 
 **Key Characteristics**:
-- **Schema**: Structured with column names and types
+- **Schema**: Tabular structured with column names and types
 - **Immutable**: Cannot be changed after creation
-- **Lazy Evaluation**: Transformations are not executed immediately
-- **Optimized**: Catalyst optimizer generates efficient execution plans
-- **Language Agnostic**: Same performance in Python, Scala, Java, R
+
 
 #### Datasets
-```scala
-// Dataset is a type-safe version of DataFrame (Scala/Java only)
-// Provides compile-time type safety
+Dataset is a type-safe version of DataFrame (Scala/Java only) that provides compile-time type safety.
 
+```scala
 case class Person(id: Int, name: String, age: Int)
 
 val ds = spark.createDataset(Seq(
@@ -368,42 +365,242 @@ val adults = ds.filter(_.age >= 18)
 - **Encoders**: Serialize objects efficiently
 
 **DataFrame vs Dataset**:
-- DataFrame = Dataset[Row] (untyped)
+- DataFrame = collection of generic objects, Dataset[Row], where a Row is a generic untyped JVM object that may hold different types of fields.
 - Dataset provides type safety at compile time
-- DataFrame is available in all languages; Dataset only in Scala/Java
+- In Spark’s supported languages, Datasets make sense only in Java and Scala, because types are bound to variables and objects at compile time. In Scala, however, a DataFrame is just an alias for untyped Dataset[Row].
+- In Python and R only DataFrames make sense. This is because Python types are dynamically inferred or assigned during execution, not during compile time. 
 
 ### SparkSession Lifecycle
 
+The SparkSession, introduced in Spark 2.0, provides a unified entry point for programming Spark with the Structured APIs. You can use a SparkSession to access Spark functionality: just import the class and create an instance in your code.
+To issue any SQL query, use the sql() method on the SparkSession instance, spark, such as spark.sql("SELECT * FROM myTableName"). All spark.sql queries executed in this manner return a DataFrame on which you may perform further Spark operations if you desire.
+
+#### 1. Creation Phase
+
 ```python
-# 1. Creating SparkSession (Entry Point)
+from pyspark.sql import SparkSession
+
+# Standard creation
 spark = SparkSession.builder \
-    .appName("MyApp") \
+    .appName("MyApplication") \
     .master("local[*]") \
     .config("spark.sql.shuffle.partitions", "200") \
+    .config("spark.executor.memory", "4g") \
     .getOrCreate()
+```
 
-# 2. Using SparkSession
-df = spark.read.csv("data.csv")
-df.createOrReplaceTempView("temp_view")
-result = spark.sql("SELECT * FROM temp_view")
+**Key Points:**
+- `builder` pattern allows fluent configuration
+- `getOrCreate()` returns existing session if one exists (singleton pattern)
+- `master()` specifies cluster manager (local, yarn, mesos, k8s)
+- Configuration can be set at creation time
 
-# 3. Stopping SparkSession
+**What happens during creation:**
+1. SparkContext is initialized (if not already existing)
+2. SQL Context is created
+3. Hive support is enabled (if configured)
+4. Catalog is initialized for metadata management
+5. Session state is established
+
+#### 2. Active Phase (Usage)
+
+During this phase, you perform all Spark operations:
+
+```python
+# Reading data
+df = spark.read.parquet("data.parquet")
+df = spark.read.json("data.json")
+
+# Creating DataFrames
+df = spark.createDataFrame(data, schema)
+
+# SQL operations
+df.createOrReplaceTempView("my_table")
+result = spark.sql("SELECT * FROM my_table WHERE age > 25")
+
+# Accessing catalog
+spark.catalog.listDatabases()
+spark.catalog.listTables()
+
+# Configuration changes at runtime
+spark.conf.set("spark.sql.shuffle.partitions", "100")
+current_value = spark.conf.get("spark.sql.shuffle.partitions")
+
+# Creating new sessions (isolated SQL configs)
+newSession = spark.newSession()
+```
+
+**Session Components Available:**
+
+| Component | Access | Purpose |
+|-----------|--------|---------|
+| SparkContext | `spark.sparkContext` | Low-level RDD operations |
+| SQL Context | Built-in | SQL query execution |
+| Catalog | `spark.catalog` | Metadata management |
+| Conf | `spark.conf` | Runtime configuration |
+| UDF Registration | `spark.udf` | Register user-defined functions |
+
+#### 3. Session vs Context Relationship
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  SparkSession                       │
+│  ┌───────────────────────────────────────────────┐  │
+│  │              SparkContext                     │  │
+│  │  (One per JVM - shared across sessions)       │  │
+│  └───────────────────────────────────────────────┘  │
+│  ┌───────────────┐  ┌───────────────────────────┐   │
+│  │  SQL Config   │  │       Catalog             │   │
+│  │  (Per session)│  │   (Metadata management)   │   │
+│  └───────────────┘  └───────────────────────────┘   │
+│  ┌───────────────────────────────────────────────┐  │
+│  │            Session State                      │  │
+│  │  (Temp views, UDFs, current database)         │  │
+│  └───────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+```
+
+**Important:** 
+- Only **one SparkContext** per JVM
+- Multiple SparkSessions can share the same SparkContext
+- Each session has isolated SQL configurations and temp views
+
+#### 4. Multiple Sessions
+
+```python
+# Create a new isolated session
+spark2 = spark.newSession()
+
+# Each session has isolated:
+# - Temporary views
+# - SQL configurations
+# - Registered UDFs
+
+# Session 1
+spark.conf.set("spark.sql.shuffle.partitions", "100")
+df.createOrReplaceTempView("table1")
+
+# Session 2 - isolated config and views
+spark2.conf.set("spark.sql.shuffle.partitions", "200")
+# spark2.sql("SELECT * FROM table1")  # ERROR - table1 not visible
+
+# But they share:
+# - SparkContext (cluster resources)
+# - Cached DataFrames
+# - Permanent tables in metastore
+```
+
+#### 5. Termination Phase
+
+```python
+# Stop the SparkSession (and underlying SparkContext)
 spark.stop()
 ```
 
-**Lifecycle Stages**:
-1. **Creation**: `SparkSession.builder.getOrCreate()`
-2. **Active**: Execute transformations and actions
-3. **Termination**: `spark.stop()` releases resources
+**What happens during termination:**
+1. All running jobs are cancelled
+2. Executors are released
+3. Cached data is cleared
+4. SparkContext is stopped
+5. Connection to cluster manager is closed
+6. All resources are freed
 
-**Important Notes**:
-- One SparkSession per application (singleton pattern)
-- `getOrCreate()` reuses existing session or creates new one
-- SparkSession encapsulates SparkContext, SQLContext, HiveContext
-- Stopping SparkSession stops the entire Spark application
+**Important Considerations:**
+```python
+# After stop(), the session cannot be reused
+spark.stop()
+# spark.read.csv("data.csv")  # ERROR - session already stopped
+
+# You must create a new session
+spark = SparkSession.builder.getOrCreate()  # Creates new session
+```
+
+#### 6. Lifecycle States Summary
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   CREATED    │ ──► │    ACTIVE    │ ──► │   STOPPED    │
+│              │     │              │     │              │
+│ - Context    │     │ - Read/Write │     │ - Resources  │
+│   initialized│     │ - SQL queries│     │   released   │
+│ - Resources  │     │ - Processing │     │ - Cannot     │
+│   allocated  │     │ - Caching    │     │   reuse      │
+└──────────────┘     └──────────────┘     └──────────────┘
+                            │
+                            ▼
+                     ┌──────────────┐
+                     │  NEW SESSION │
+                     │  (Optional)  │
+                     │              │
+                     │ - Isolated   │
+                     │   config     │
+                     │ - Shared     │
+                     │   context    │
+                     └──────────────┘
+```
+
+#### 7. Common Patterns
+
+**Pattern 1: Application Entry Point**
+```python
+def main():
+    spark = SparkSession.builder \
+        .appName("MyETL") \
+        .getOrCreate()
+    
+    try:
+        run_etl(spark)
+    finally:
+        spark.stop()
+
+if __name__ == "__main__":
+    main()
+```
+
+**Pattern 2: Notebook/Interactive**
+```python
+# In Databricks/Jupyter - session often pre-created
+# Access existing session
+spark = SparkSession.builder.getOrCreate()
+
+# Don't call spark.stop() in notebooks!
+```
+
+**Pattern 3: Testing**
+```python
+# Create isolated session for tests
+@pytest.fixture
+def spark_session():
+    spark = SparkSession.builder \
+        .master("local[2]") \
+        .appName("test") \
+        .getOrCreate()
+    yield spark
+    spark.stop()
+```
+
+#### 8. Lifecycle Best Practices
+
+✓ Use `getOrCreate()` to avoid duplicate sessions  
+✓ Single session per application (typical pattern)  
+✓ Always stop session when done (releases cluster resources)  
+✓ Use try/finally for graceful shutdown  
+✓ Don't call `spark.stop()` in notebooks (session is managed)  
+✓ Use `newSession()` for isolated SQL configs when needed
 
 ### Caching and Persistence
 
+#### Cache?
+In applications that reuse the same datasets over and over, one of the most useful optimizations is
+caching. Caching will place a DataFrame, table, or RDD into temporary storage (either memory
+or disk) across the executors in your cluster, and make subsequent reads faster. Although caching
+might sound like something we should do all the time, it’s not always a good thing to do. That’s
+because caching data incurs a serialization, deserialization, and storage cost. For example, if you
+are only going to process a dataset once (in a later transformation), caching it will only slow you
+down.
+The **cache** command in Spark always places data in memory by default, caching only part of the
+dataset if the cluster’s total memory is full. For more control, there is also a **persist** method that
+takes a StorageLevel object to specify where to cache the data: in memory, on disk, or both.
 #### Why Cache?
 - Avoid recomputing expensive transformations
 - Speed up iterative algorithms (ML)
@@ -447,6 +644,11 @@ df.unpersist()
 - Consider serialization for memory constraints
 
 ### Garbage Collection
+
+A garbage collector is a form of automatic memory management in computer science that reclaims memory no longer in use by a program. It operates by identifying and freeing memory that is no longer referenced, which prevents memory leaks and improves performance by ensuring memory is available for reuse.
+During the course of running Spark jobs, the executor or driver machines may struggle to complete their tasks because of a lack of sufficient memory or “memory pressure.” This may occur when an application takes up too much memory during execution or when garbage collection runs too frequently or is slow to run as large numbers of objects are created in the JVM and subsequently garbage collected as they are no longer used. One strategy for easing this issue is to ensure that you’re using the Structured APIs as much as possible. These will not only
+increase the efficiency with which your Spark jobs will execute, but it will also greatly reduce memory pressure because JVM objects are never realized and Spark SQL simply performs the
+computation on its internal format.
 
 **Impact on Spark Performance**:
 - Long GC pauses freeze executors
@@ -530,8 +732,12 @@ df_filtered.write.parquet("output")  # Job 2
 ```
 
 #### 3. Stage
-- **Definition**: Set of tasks that can be executed in parallel
-- **Division**: Stages are divided by shuffle boundaries
+- **Definition**: Groups of tasks that can be executed together to compute the same operation on multiple machines.
+- **Division**: Stages are divided by shuffle boundaries. Spark starts a new stage after each
+shuffle, and keeps track of what order the stages must run in to compute the final result (A shuffle represents a physical repartitioning of the data).Regardless of the
+number of partitions, that entire stage is computed in parallel. The final result aggregates those
+partitions individually, brings them all to a single partition before finally sending the final result
+to the driver.
 - **Contains**: Multiple tasks (one per partition)
 - **Types**:
   - **ShuffleMapStage**: Produces output for shuffle
@@ -555,12 +761,6 @@ result.write.parquet("output")
 - **Granularity**: One task per partition
 - **Execution**: Runs on a single core
 - **Locality**: Prefers data-local execution
-
-**Task Locality Levels**:
-1. **PROCESS_LOCAL**: Data in same JVM
-2. **NODE_LOCAL**: Data on same node
-3. **RACK_LOCAL**: Data on same rack
-4. **ANY**: Data anywhere in cluster
 
 **Formula**: Number of Tasks = Number of Partitions
 
@@ -759,10 +959,10 @@ df_salted = df.withColumn("salted_key", concat(col("key"), lit("_"), (rand() * 1
 ### Transformations vs Actions
 
 #### Transformations
-- **Definition**: Operations that create new RDD/DataFrame from existing one
-- **Execution**: Lazy (not executed immediately)
-- **Return**: New RDD/DataFrame
-- **Purpose**: Build computation pipeline
+- Operations that create new RDD/DataFrame from existing one
+- All transformations are evaluated lazily. That is, their results are not computed until an action is invoked or data is “touched” (read from or written to disk).
+- Their results are recorded or remembered as a lineage, allowing spark, at later time, to promote optimizations for more efficient execution.
+
 
 **Narrow Transformations** (No Shuffle):
 ```python
@@ -972,11 +1172,11 @@ df.groupBy("category").count().collect()  # One job
 ### Overview
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Apache Spark                        │
-├─────────────────────────────────────────────────────┤
-│                   Spark Core                         │
-│            (RDD, Transformations, Actions)           │
+┌────────────────────────────────────────────────────┐
+│                  Apache Spark                      │
+├────────────────────────────────────────────────────┤
+│                   Spark Core                       │
+│            (RDD, Transformations, Actions)         │
 ├──────────────┬──────────────┬──────────────────────┤
 │  Spark SQL   │  Structured  │       MLlib          │
 │  DataFrames  │  Streaming   │  (Machine Learning)  │
@@ -1146,44 +1346,208 @@ val names = ds.map(_.name)
 
 ### 5. Pandas API on Spark
 
-**Pandas Compatibility on Spark**:
-- Use familiar Pandas syntax
-- Scale to big data
-- Distributed execution
+**Pandas API on Spark** (formerly known as Koalas) allows you to use the familiar Pandas syntax to process data at distributed scale using Apache Spark.
 
-**Example**:
+#### Main Characteristics
+
+**1. Identical Pandas Syntax**
 ```python
 import pyspark.pandas as ps
 
-# Create Pandas-on-Spark DataFrame
+# Create DataFrame - same Pandas syntax
 psdf = ps.DataFrame({
     'name': ['Alice', 'Bob', 'Charlie'],
-    'age': [25, 30, 35]
+    'age': [25, 30, 35],
+    'salary': [50000, 60000, 70000]
 })
 
-# Pandas-like operations
-psdf['age_group'] = psdf['age'] // 10
-filtered = psdf[psdf['age'] > 25]
-grouped = psdf.groupby('age_group').mean()
+# Familiar operations
+psdf['bonus'] = psdf['salary'] * 0.1
+psdf = psdf[psdf['age'] > 25]
+psdf.groupby('age').mean()
+```
 
-# Convert to/from Spark DataFrame
-sdf = psdf.to_spark()
-psdf = ps.from_spark(sdf)
+**2. Distributed Execution**
+- Data is distributed in partitions across the cluster
+- Parallel processing on multiple executors
+- Scales to terabytes of data
 
-# Convert to Pandas (collect to driver)
+**3. Easy Conversion**
+```python
+# Pandas → Pandas on Spark
+import pandas as pd
+pdf = pd.DataFrame({'a': [1, 2, 3]})
+psdf = ps.from_pandas(pdf)
+
+# Pandas on Spark → Spark DataFrame
+spark_df = psdf.to_spark()
+
+# Spark DataFrame → Pandas on Spark
+psdf = ps.DataFrame(spark_df)
+# or
+psdf = spark_df.pandas_api()
+
+# Pandas on Spark → Pandas (caution: collects to driver!)
 pdf = psdf.to_pandas()
 ```
 
-**Differences from Pandas**:
-- Distributed (not single machine)
-- Lazy evaluation (some operations)
-- Some functions not supported
-- Different performance characteristics
+**4. Index Support**
+```python
+# Pandas on Spark supports indexes like Pandas
+psdf = ps.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
+psdf = psdf.set_index('a')
+psdf.loc[2]  # Access by index
+```
 
-**Use Cases**:
-- Migrate Pandas code to Spark
-- Scale existing analytics
-- Data scientists familiar with Pandas
+**5. Integration with Spark Ecosystem**
+- Access to Spark SQL
+- Compatible with Delta Lake
+- Uses Catalyst Optimizer for optimization
+
+#### Advantages
+
+| Advantage | Description |
+|-----------|-------------|
+| **Low Learning Curve** | Data scientists already familiar with Pandas can use Spark immediately |
+| **Scalability** | Processes datasets much larger than single machine memory |
+| **Easy Migration** | Existing Pandas code can be migrated with minimal changes |
+| **Productivity** | Rich and expressive API for data analysis |
+| **Performance** | Leverages Spark optimizations (Catalyst, Tungsten) |
+| **Flexibility** | Can switch between Pandas API and Spark DataFrame API as needed |
+
+#### Comparison: Pandas vs Pandas on Spark
+
+| Aspect | Pandas | Pandas on Spark |
+|--------|--------|-----------------|
+| **Execution** | Single-node (1 machine) | Distributed (cluster) |
+| **Data Limit** | Available RAM memory | Scales to PB |
+| **Evaluation** | Eager (immediate) | Lazy (for some operations) |
+| **Ordering** | Guaranteed by default | Not guaranteed (distributed) |
+| **Small data performance** | Faster | Spark overhead |
+| **Big Data performance** | Not supported | Highly efficient |
+
+#### Practical Examples
+
+**Common Operations**:
+```python
+import pyspark.pandas as ps
+
+# Reading data
+psdf = ps.read_csv("large_file.csv")
+psdf = ps.read_parquet("data.parquet")
+
+# Exploratory analysis
+psdf.head(10)
+psdf.describe()
+psdf.info()
+psdf.shape
+
+# Data manipulation
+psdf['new_col'] = psdf['col1'] + psdf['col2']
+psdf = psdf.dropna()
+psdf = psdf.fillna(0)
+psdf = psdf.drop_duplicates()
+
+# Aggregations
+psdf.groupby('category').agg({
+    'sales': 'sum',
+    'quantity': 'mean'
+})
+
+# Sorting
+psdf = psdf.sort_values('date', ascending=False)
+
+# Merge/Join
+result = ps.merge(psdf1, psdf2, on='key', how='left')
+```
+
+**Window Functions**:
+```python
+# Window functions work like in Pandas
+psdf['rolling_avg'] = psdf.groupby('category')['sales'].transform(
+    lambda x: x.rolling(7).mean()
+)
+```
+
+**Plotting (Visualization)**:
+```python
+# Visualization support
+psdf['sales'].plot.hist()
+psdf.plot.scatter(x='age', y='salary')
+```
+
+#### Limitations and Considerations
+
+**⚠️ Differences from Traditional Pandas**:
+
+1. **Ordering not guaranteed**
+```python
+# Pandas on Spark is distributed - order may vary
+# Use sort_values() explicitly when order matters
+psdf = psdf.sort_values('column')
+```
+
+2. **Some functions not supported**
+```python
+# Not all Pandas functions are available
+# Check documentation for compatibility
+```
+
+3. **Operations that collect data**
+```python
+# Be careful with operations that bring data to driver
+psdf.to_pandas()  # Collects ALL data - may cause OOM
+psdf.to_numpy()   # Same issue
+```
+
+4. **Default Index**
+```python
+# By default, uses distributed sequence index
+# Can be expensive for large datasets
+ps.set_option('compute.default_index_type', 'distributed')
+```
+
+#### When to Use Pandas API on Spark?
+
+**✅ Use when:**
+- Dataset larger than single machine memory
+- Team already knows Pandas and wants to scale
+- Quick migration of existing Pandas code
+- Exploratory analysis on Big Data
+- Prototyping before optimizing with Spark DataFrame API
+
+**❌ Prefer Spark DataFrame API when:**
+- Performance is critical
+- Complex production pipelines
+- Need fine-grained control over partitioning
+- Operations not supported by Pandas API
+
+#### Visual Summary
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  PANDAS API ON SPARK                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────┐     ┌─────────────────────────────┐   │
+│  │   Pandas API    │ ──► │   Spark Execution Engine    │   │
+│  │   (Familiar)    │     │   (Distributed Processing)  │   │
+│  └─────────────────┘     └─────────────────────────────┘   │
+│                                                             │
+│  ADVANTAGES:                                                │
+│  ✓ Familiar Pandas syntax                                   │
+│  ✓ Spark scalability                                        │
+│  ✓ Easy migration of existing code                          │
+│  ✓ Simple conversion between APIs                           │
+│  ✓ Automatic optimization (Catalyst)                        │
+│                                                             │
+│  IDEAL FOR:                                                 │
+│  • Data Scientists migrating to Big Data                    │
+│  • Exploratory analysis on large datasets                   │
+│  • Rapid prototyping                                        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ### 6. Structured Streaming
 
