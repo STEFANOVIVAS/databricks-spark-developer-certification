@@ -590,7 +590,7 @@ def spark_session():
 
 ### Caching and Persistence
 
-#### Cache?
+#### Cache
 In applications that reuse the same datasets over and over, one of the most useful optimizations is
 caching. Caching will place a DataFrame, table, or RDD into temporary storage (either memory
 or disk) across the executors in your cluster, and make subsequent reads faster. Although caching
@@ -734,10 +734,7 @@ df_filtered.write.parquet("output")  # Job 2
 #### 3. Stage
 - **Definition**: Groups of tasks that can be executed together to compute the same operation on multiple machines.
 - **Division**: Stages are divided by shuffle boundaries. Spark starts a new stage after each
-shuffle, and keeps track of what order the stages must run in to compute the final result (A shuffle represents a physical repartitioning of the data).Regardless of the
-number of partitions, that entire stage is computed in parallel. The final result aggregates those
-partitions individually, brings them all to a single partition before finally sending the final result
-to the driver.
+shuffle, and keeps track of what order the stages must run in to compute the final result (A shuffle represents a physical repartitioning of the data).Regardless of the number of partitions, that entire stage is computed in parallel. The final result aggregates those partitions individually, brings them all to a single partition before finally sending the final result to the driver.
 - **Contains**: Multiple tasks (one per partition)
 - **Types**:
   - **ShuffleMapStage**: Produces output for shuffle
