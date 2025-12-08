@@ -225,18 +225,26 @@
   - Total tasks = cores × executors
 
 ### 6. Memory
-- **Types of Memory in Spark**:
 
-**Executor Memory** (`spark.executor.memory`):
-- **Execution Memory** (60% by default): For computations (shuffles, joins, sorts, aggregations)
-- **Storage Memory** (40% by default): For caching and broadcast variables
-- **User Memory** (40% of total): For user data structures
-- **Reserved Memory** (300MB): For Spark internal objects
+![Alt text of the image](https://github.com/afaqueahmad7117/spark-experiments/blob/main/docs/images/memory_management.png)
 
-**Driver Memory** (`spark.driver.memory`):
-- Stores metadata about partitions
-- Collects results from executors
-- Runs the main application
+Image from https://github.com/afaqueahmad7117/spark-experiments/
+
+- **JVM on Heap Memory** (`spark.executor.memory`):
+  - **Execution Memory**: For computations (shuffles, joins, sorts, aggregations)
+  - **Storage Memory**: For caching and broadcast variables
+  - **User Memory**: For user data structures
+  - **Reserved Memory** (300MB): For Spark internal objects
+    
+- **Off-Heap Memory**
+
+  Off-Heap memory means allocating memory objects (serialized to byte array) to memory outside the heap of the Java virtual machine(JVM), which is directly managed by the operating system (not the virtual machine), but stored outside the process heap in native memory (therefore, they are not processed by the garbage collector). The result of this is to keep a smaller heap to reduce the impact of garbage collection on the application. Accessing this data is slightly slower than accessing the on-heap storage, but still faster than reading/writing from a disk. The downside is that the user has to manually deal with managing the allocated memory
+  
+- **Overhead Memory**  
+- **Driver Memory** (`spark.driver.memory`):
+  - Stores metadata about partitions
+  - Collects results from executors
+  - Runs the main application
 
 ### 7. Cluster Manager
 The Cluster Manager manages the set of machines (the cluster) where your Spark applications will run. It manages physical resources (machines, memory, CPU) and has its own driver (or master) and worker architecture — but here we are talking in terms of physical machines, not Spark processes.
