@@ -368,6 +368,142 @@ CLUSTERED BY (user_id) INTO 100 BUCKETS
 STORED AS PARQUET;
 ```
 
+### partitionBy vs bucketBy - Deep Dive
+
+Understanding the difference between `partitionBy` and `bucketBy` is crucial for optimizing data storage and query performance.
+
+#### Quick Comparison
+
+| Aspect | `partitionBy` | `bucketBy` |
+|--------|---------------|------------|
+| **Purpose** | Organize data into directories | Organize data into fixed number of files |
+| **Storage Structure** | Creates subdirectories per partition value | Creates fixed number of files (buckets) |
+| **Best For** | Filtering on partition columns | Joins and aggregations on bucket columns |
+| **Cardinality** | Low cardinality columns (year, month, country) | High cardinality columns (user_id, product_id) |
+| **File Count** | One directory per unique value | Fixed number of buckets (you specify) |
+| **Query Optimization** | Partition pruning | Avoid shuffle in joins |
+
+#### `partitionBy` - Directory-Based Partitioning
+
+Creates a **directory structure** based on column values.
+
+```python
+# Write with partitionBy
+df.write \
+    .partitionBy("year", "month") \
+    .parquet("output/sales")
+
+# Directory structure created:
+# output/sales/
+#   ├── year=2023/
+#   │   ├── month=01/
+#   │   │   └── part-00000.parquet
+#   │   ├── month=02/
+#   │   │   └── part-00000.parquet
+#   └── year=2024/
+#       ├── month=01/
+#       │   └── part-00000.parquet
+```
+
+**Benefits:**
+- **Partition Pruning**: Only reads relevant directories
+```python
+# Only reads year=2024 directory (skips 2023)
+df = spark.read.parquet("output/sales").filter(col("year") == 2024)
+```
+
+**When to use:**
+- ✅ Low cardinality columns (few unique values)
+- ✅ Frequently filtered columns (date, region, status)
+- ✅ Time-series data (year, month, day)
+
+**When NOT to use:**
+- ❌ High cardinality columns (millions of unique values = millions of directories)
+- ❌ Columns used primarily for joins
+
+#### `bucketBy` - Hash-Based Bucketing
+
+Distributes data into a **fixed number of files** using hash partitioning.
+
+```python
+# Write with bucketBy (requires saveAsTable)
+df.write \
+    .bucketBy(8, "user_id") \
+    .sortBy("user_id") \
+    .saveAsTable("bucketed_sales")
+
+# Creates exactly 8 files, each containing data
+# where hash(user_id) % 8 = bucket_number
+```
+
+**Benefits:**
+- **Shuffle-Free Joins**: If both tables are bucketed on join key with same bucket count
+```python
+# Both tables bucketed by user_id into 8 buckets
+users = spark.table("bucketed_users")      # 8 buckets on user_id
+orders = spark.table("bucketed_orders")    # 8 buckets on user_id
+
+# Join WITHOUT shuffle! (sort-merge join)
+result = users.join(orders, "user_id")
+```
+
+**When to use:**
+- ✅ High cardinality columns (user_id, transaction_id)
+- ✅ Columns frequently used in joins
+- ✅ Columns used in aggregations
+
+**When NOT to use:**
+- ❌ Low cardinality columns (better to use partitionBy)
+- ❌ Ad-hoc queries with filters (no pruning benefit)
+
+#### Combined Usage
+
+You can use **both together** for maximum optimization:
+
+```python
+df.write \
+    .partitionBy("year", "month") \
+    .bucketBy(16, "customer_id") \
+    .sortBy("customer_id") \
+    .saveAsTable("sales_optimized")
+
+# Structure:
+# - Partitioned by year/month (directory structure)
+# - Within each partition, bucketed by customer_id (16 files)
+```
+
+#### Visual Summary
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     partitionBy vs bucketBy                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  partitionBy("region")              bucketBy(4, "user_id")      │
+│  ┌─────────────────┐                ┌─────────────────┐         │
+│  │ region=US/      │                │ bucket_0.parquet│ ← hash  │
+│  │   └─ data.parq  │                │ bucket_1.parquet│   % 4   │
+│  │ region=EU/      │                │ bucket_2.parquet│   = 0-3 │
+│  │   └─ data.parq  │                │ bucket_3.parquet│         │
+│  │ region=ASIA/    │                └─────────────────┘         │
+│  │   └─ data.parq  │                                            │
+│  └─────────────────┘                                            │
+│                                                                 │
+│  FILTER: region='US'                JOIN on user_id             │
+│  → Reads only US dir                → No shuffle needed         │
+│    (partition pruning)                (if both tables bucketed) │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Key Points for Exam
+
+1. **`partitionBy`** = directories, good for **filters**, low cardinality
+2. **`bucketBy`** = fixed files, good for **joins**, high cardinality
+3. **`bucketBy` requires `saveAsTable`** (not compatible with `save()` or `parquet()`)
+4. **Shuffle-free joins** require same bucket count and bucket columns on both tables
+5. Can combine both for maximum optimization
+
 ---
 
 ## 4. Register DataFrames as Temporary Views

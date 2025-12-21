@@ -177,14 +177,92 @@ spark.conf.set("spark.sql.adaptive.skewJoin.enabled", "true")
 spark.conf.set("spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes", "256MB")
 ```
 
-### Reducing Shuffling
+### Understanding Shuffle in Spark
 
-**What Causes Shuffle:**
-- groupBy, reduceByKey, aggregations
-- join operations (except broadcast join)
-- distinct, repartition
-- sort, orderBy
-- window functions
+**Shuffle** is the process of redistributing data across partitions through the cluster nodes. It is one of the **most expensive** operations in Spark because it involves:
+
+1. **Disk I/O** - data is serialized and written
+2. **Network Transfer** - data moves between executors
+3. **Reading and Deserialization** - data is reconstructed at the destination
+
+```
+Before Shuffle:                      After Shuffle:
+┌─────────────────┐                  ┌─────────────────┐
+│ Executor 1      │                  │ Executor 1      │
+│ [A, B, A, C]    │                  │ [A, A, A, A]    │  ← all A's
+└─────────────────┘                  └─────────────────┘
+┌─────────────────┐      ───►        ┌─────────────────┐
+│ Executor 2      │                  │ Executor 2      │
+│ [B, A, C, B]    │                  │ [B, B, B]       │  ← all B's
+└─────────────────┘                  └─────────────────┘
+┌─────────────────┐                  ┌─────────────────┐
+│ Executor 3      │                  │ Executor 3      │
+│ [C, C, A, B]    │                  │ [C, C, C]       │  ← all C's
+└─────────────────┘                  └─────────────────┘
+```
+
+#### Why Shuffle is Expensive
+
+| Cost | Description |
+|---|---|
+| **Disk I/O** | Data is written to shuffle files |
+| **Network** | Transfer between executors |
+| **Serialization** | Object to bytes conversion |
+| **Memory** | Buffering during transfer |
+| **GC Pressure** | Object allocation/deallocation |
+
+#### Shuffle Phases
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        SHUFFLE                               │
+├────────────────────────┬────────────────────────────────────┤
+│      MAP SIDE          │           REDUCE SIDE              │
+│  (Shuffle Write)       │         (Shuffle Read)             │
+├────────────────────────┼────────────────────────────────────┤
+│ 1. Serialize data      │ 1. Fetch data from mappers         │
+│ 2. Partition by key    │ 2. Deserialize                     │
+│ 3. Write to disk       │ 3. Combine partitions              │
+│ 4. Notify driver       │ 4. Process data                    │
+└────────────────────────┴────────────────────────────────────┘
+```
+
+#### Operations that Cause Shuffle
+
+| Operation | Reason |
+|---|---|
+| `groupBy()` / `groupByKey()` | Groups data by key |
+| `reduceByKey()` | Reduces values by key |
+| `join()` | Combines DataFrames by key |
+| `distinct()` | Removes duplicates (needs to compare all) |
+| `repartition()` | Redistributes data to new partitions |
+| `orderBy()` / `sort()` | Sorts data globally |
+| `coalesce()` with more partitions | Increases partition count |
+
+#### Important Shuffle Configurations
+
+```python
+# Number of partitions after shuffle (default: 200)
+spark.conf.set("spark.sql.shuffle.partitions", 100)
+
+# Shuffle buffer size
+spark.conf.set("spark.shuffle.file.buffer", "64k")
+
+# Shuffle compression (recommended)
+spark.conf.set("spark.shuffle.compress", "true")
+```
+
+#### How to Minimize Shuffle
+
+| Strategy | Description |
+|---|---|
+| **Broadcast Join** | Avoids shuffle by sending small DF to all nodes |
+| **Data Colocation** | Use same partitioner in DataFrames to be joined |
+| **Bucket Tables** | Pre-partition data at write time |
+| **Filter Early** | Reduce data before operations that cause shuffle |
+| **reduceByKey vs groupByKey** | `reduceByKey` does local aggregation before shuffle |
+| **Strategic Caching** | Persist data after shuffle for reuse |
+
 
 **Shuffle Metrics:**
 ```python
@@ -210,7 +288,7 @@ result = large_df.join(broadcast(small_df), "key")
 spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "104857600")  # 100MB
 ```
 
-**Strategy 2: Pre-partition Data**
+**Strategy 2: Data Colocation**
 ```python
 # Write data partitioned by join key
 df.write.partitionBy("join_key").parquet("/partitioned/data")
@@ -245,17 +323,7 @@ df1_filtered = df1.filter(col("date") >= "2024-01-01")
 result = df1_filtered.join(df2, "key")
 ```
 
-**Strategy 5: Combine Operations**
-```python
-# Bad: Multiple shuffles
-df.groupBy("key1").agg(sum("amount")) \
-  .groupBy("key2").agg(sum("sum(amount)"))  # 2 shuffles
-
-# Better: Single groupBy if possible
-df.groupBy("key1", "key2").agg(sum("amount"))  # 1 shuffle
-```
-
-**Strategy 6: Use reduceByKey Instead of groupByKey**
+**Strategy 5: Use reduceByKey Instead of groupByKey**
 ```python
 # Bad: groupByKey (shuffles all data)
 rdd.groupByKey().mapValues(sum)
@@ -264,7 +332,7 @@ rdd.groupByKey().mapValues(sum)
 rdd.reduceByKey(lambda a, b: a + b)
 ```
 
-**Strategy 7: Cache Intermediate Results**
+**Strategy 6: Cache Intermediate Results**
 ```python
 # If DataFrame is reused multiple times
 df_filtered = df.filter(col("status") == "active")
@@ -273,6 +341,15 @@ df_filtered.cache()
 # Multiple operations on cached DataFrame (no re-computation)
 result1 = df_filtered.groupBy("category").count()
 result2 = df_filtered.groupBy("region").agg(sum("amount"))
+```
+**Strategy 7: Combine Operations**
+```python
+# Bad: Multiple shuffles
+df.groupBy("key1").agg(sum("amount")) \
+  .groupBy("key2").agg(sum("sum(amount)"))  # 2 shuffles
+
+# Better: Single groupBy if possible
+df.groupBy("key1", "key2").agg(sum("amount"))  # 1 shuffle
 ```
 
 ### Partition Size Optimization
