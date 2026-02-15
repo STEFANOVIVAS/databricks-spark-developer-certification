@@ -13,7 +13,7 @@
 
 ## 1. Advantages and Challenges of Spark
 
-### Advantages ✓
+### Advantages :white_check_mark:
 
 **Speed and Performance**
 - **In-Memory Processing**: Spark processes data in-memory (RAM), making it up to 100x faster than MapReduce for certain workloads
@@ -44,7 +44,7 @@
 - **Structured Streaming**: Real-time stream processing
 - **GraphX**: Graph processing and analytics
 
-### Challenges ✗
+### Challenges :warning:
 
 **1. Cluster Configuration & Resource Management**
 - Sizing executors (memory, cores) appropriately is complex
