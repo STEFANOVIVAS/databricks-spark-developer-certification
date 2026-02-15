@@ -1,4 +1,4 @@
-# Section 5: Structured Streaming - Study Guide
+# Section 5: Structured Streaming - 10%
 
 ## Overview
 Structured Streaming is a scalable and fault-tolerant stream processing engine built on the Spark SQL engine. It treats streaming data as a table being continuously appended.

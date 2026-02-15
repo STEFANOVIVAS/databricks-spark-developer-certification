@@ -1,4 +1,4 @@
-# Section 4: Troubleshooting and Tuning Apache Spark DataFrame API Applications - Study Guide
+# Section 4: Troubleshooting and Tuning Apache Spark DataFrame API Applications - 10%
 
 ## Overview
 This section covers performance optimization, troubleshooting techniques, and monitoring strategies for Apache Spark applications to achieve optimal cluster utilization and resolve common issues.
@@ -237,7 +237,7 @@ Before Shuffle:                      After Shuffle:
 | `distinct()` | Removes duplicates (needs to compare all) |
 | `repartition()` | Redistributes data to new partitions |
 | `orderBy()` / `sort()` | Sorts data globally |
-| `coalesce()` with more partitions | Increases partition count |
+| `coalesce()`  | Reduces partition count |
 
 #### Important Shuffle Configurations
 
@@ -258,7 +258,7 @@ spark.conf.set("spark.shuffle.compress", "true")
 |---|---|
 | **Broadcast Join** | Avoids shuffle by sending small DF to all nodes |
 | **Data Colocation** | Use same partitioner in DataFrames to be joined |
-| **Bucket Tables** | Pre-partition data at write time |
+| **Bucket Tables** | Pre-partition data at write time with fixed number of partitions|
 | **Filter Early** | Reduce data before operations that cause shuffle |
 | **reduceByKey vs groupByKey** | `reduceByKey` does local aggregation before shuffle |
 | **Strategic Caching** | Persist data after shuffle for reuse |

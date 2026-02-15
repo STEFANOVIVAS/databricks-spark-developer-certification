@@ -1,4 +1,4 @@
-# Section 1: Apache Spark Architecture and Components - Study Guide
+# Section 1: Apache Spark Architecture and Components - 20%
 
 ## Table of Contents
 1. [Advantages and Challenges of Spark](#1-advantages-and-challenges-of-spark)
@@ -1781,6 +1781,28 @@ The 60/40 split is unified and can dynamically adjust between execution and stor
   - Spills to disk if insufficient memory
   - More resilient but potentially slower
 </details>
+
+
+### Question 6-A: Persist
+
+**Q**: In which situation will it be most advantageous to store DataFrame df at the MEMORY_AND_DISK storage level rather than the MEMORY_ONLY storage level?
+
+<details>
+<summary>Answer</summary>
+
+- `Memory_and_Disk`, which is the default mode for cache or persist. That means, if the data size is larger than the memory, it will store the extra data in disk. Next time when we need to read data, we will read data firstly from memory, and then read from disk.
+- `Memory_Only`, if the data size is larger than memory, it will not store the extra data. Next time we read data, we will read from memory first and then recompute the extra data which cannot store in memory.
+- Therefore, the difference/balance between Memory_only and memory_and_disk lay in how they handle the extra data out of memory. So the answer is when it’s faster to read all the computed data in DataFrame from disk (that cannot fit into memory) rather than recompute it based on its logical plan.
+
+### Question 6-B: Broadcast Join
+
+**Q**: A Spark application has a 128 GB DataFrame A and a 1 GB DataFrame B. If a broadcast join were to be performed on these two DataFrames, which of the DataFrames should be broadcasted and why?
+
+<details>
+<summary>Answer</summary>
+
+- DataFrame B should be broadcasted because it is smaller and will eliminate the need for the shuffling of DataFrame A.
+- DataFrame B should be broadcasted because it is smaller and will eliminate the need for the shuffling of itself.(?)
 
 ### Question 7: Lazy Evaluation
 **Q**: In the following code, when does execution actually occur?

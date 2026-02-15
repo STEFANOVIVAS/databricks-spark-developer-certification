@@ -1,4 +1,4 @@
-# Section 6: Using Spark Connect to Deploy Applications - Study Guide
+# Section 6: Using Spark Connect to Deploy Applications - 5%
 
 ## Overview
 This section covers Spark Connect, a new client-server architecture for Apache Spark, and the different deployment modes available for running Spark applications.
@@ -15,8 +15,8 @@ Spark Connect is a decoupled client-server architecture introduced in Spark 3.4 
 **Architecture:**
 ```
 ┌─────────────────┐         gRPC          ┌──────────────────┐
-│  Client App     │ ◄──────────────────► │  Spark Connect   │
-│  (Thin Client)  │    (Remote API)      │     Server       │
+│  Client App     │ ◄──────────────────►  │  Spark Connect   │
+│  (Thin Client)  │    (Remote API)       │     Server       │
 └─────────────────┘                       └──────────────────┘
                                                     │
                                                     ▼
@@ -356,9 +356,9 @@ All Spark components (driver and executors) run in a single JVM on a single mach
 ┌─────────────────────────────────┐
 │      Single Machine (JVM)       │
 │                                 │
-│  ┌────────┐    ┌──────────┐   │
-│  │ Driver │    │ Executors│   │
-│  └────────┘    └──────────┘   │
+│  ┌────────┐    ┌──────────┐     │
+│  │ Driver │    │ Executors│     │
+│  └────────┘    └──────────┘     │
 │                                 │
 └─────────────────────────────────┘
 ```
@@ -442,21 +442,21 @@ Driver runs on the client machine (where spark-submit is executed), while execut
 ┌─────────────────┐              ┌──────────────────────────┐
 │ Client Machine  │              │     Cluster Manager      │
 │                 │              │                          │
-│  ┌──────────┐   │              │  ┌────────────────────┐ │
-│  │  Driver  │   │◄────────────►│  │  Resource Manager  │ │
-│  └──────────┘   │              │  └────────────────────┘ │
+│  ┌──────────┐   │              │  ┌────────────────────┐  │
+│  │  Driver  │   │◄────────────►│  │  Resource Manager  │  │
+│  └──────────┘   │              │  └────────────────────┘  │
 │                 │              └──────────────────────────┘
 │                 │                           │
 │                 │                           │
 │                 │              ┌────────────▼─────────────┐
 │                 │              │     Worker Nodes         │
 │                 │              │                          │
-│                 │◄────────────►│  ┌──────────┐          │
-│                 │              │  │ Executor │          │
-│                 │              │  └──────────┘          │
-│                 │              │  ┌──────────┐          │
-│                 │              │  │ Executor │          │
-│                 │              │  └──────────┘          │
+│                 │◄────────────►│  ┌──────────┐            │
+│                 │              │  │ Executor │            │
+│                 │              │  └──────────┘            │
+│                 │              │  ┌──────────┐            │
+│                 │              │  │ Executor │            │
+│                 │              │  └──────────┘            │
 └─────────────────┘              └──────────────────────────┘
 ```
 
@@ -575,25 +575,25 @@ Both driver and executors run on cluster worker nodes. Client machine only submi
 ┌─────────────────┐              ┌──────────────────────────┐
 │ Client Machine  │              │     Cluster Manager      │
 │                 │              │                          │
-│  ┌──────────┐   │  Submit      │  ┌────────────────────┐ │
-│  │spark-    │   ├─────────────►│  │  Resource Manager  │ │
-│  │submit    │   │              │  └────────────────────┘ │
+│  ┌──────────┐   │  Submit      │  ┌────────────────────┐  │
+│  │spark-    │   ├─────────────►│  │  Resource Manager  │  │
+│  │submit    │   │              │  └────────────────────┘  │
 │  └──────────┘   │              └──────────────────────────┘
 │     (exits)     │                           │
 └─────────────────┘                           │
                                   ┌────────────▼─────────────┐
                                   │     Worker Nodes         │
                                   │                          │
-                                  │  ┌──────────┐           │
-                                  │  │  Driver  │           │
-                                  │  └──────────┘           │
+                                  │  ┌──────────┐            │
+                                  │  │  Driver  │            │
+                                  │  └──────────┘            │
                                   │       │                  │
-                                  │  ┌────▼─────┐           │
-                                  │  │ Executor │           │
-                                  │  └──────────┘           │
-                                  │  ┌──────────┐           │
-                                  │  │ Executor │           │
-                                  │  └──────────┘           │
+                                  │  ┌────▼─────┐            │
+                                  │  │ Executor │            │
+                                  │  └──────────┘            │
+                                  │  ┌──────────┐            │
+                                  │  │ Executor │            │
+                                  │  └──────────┘            │
                                   └──────────────────────────┘
 ```
 

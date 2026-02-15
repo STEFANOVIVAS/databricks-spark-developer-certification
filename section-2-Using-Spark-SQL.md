@@ -1,4 +1,4 @@
-# Section 2: Using Spark SQL - Study Guide
+# Section 2: Using Spark SQL - 20%
 
 ## Overview
 Spark SQL is a Spark module for structured data processing. It provides a programming abstraction called DataFrames and can also act as a distributed SQL query engine.

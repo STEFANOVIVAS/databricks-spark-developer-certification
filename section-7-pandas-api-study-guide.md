@@ -1,4 +1,4 @@
-# Section 7: Using Pandas API on Spark - Study Guide
+# Section 7: Using Pandas API on Spark - 5%
 
 ## Overview
 Pandas API on Spark (formerly known as Koalas) provides a pandas-like API on top of Apache Spark, enabling data scientists to scale pandas code with minimal changes while leveraging Spark's distributed computing capabilities.

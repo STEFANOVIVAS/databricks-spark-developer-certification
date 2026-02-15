@@ -1,4 +1,4 @@
-# Section 3: Developing Apache Spark™ DataFrame/DataSet API Applications - Study Guide
+# Section 3: Developing Apache Spark™ DataFrame/DataSet API Applications - 30%
 
 ## Overview
 This section covers comprehensive DataFrame/DataSet API operations for data manipulation, transformation, and processing in Apache Spark.
