@@ -530,6 +530,27 @@ purchases_df.groupBy("category").agg(
 # |   Clothing|                     2|                      2|
 # |       Home|                     2|                      2|
 # +-----------+----------------------+-----------------------+
+
+# approx_percentile Returns the approximate percentile of the numeric column which is the smallest value in the ordered col values (sorted from least to greatest) such that no more than percentage of col values is less than the value or equal to that value.
+
+from pyspark.sql import functions as sf
+key = (sf.col("id") % 3).alias("key")
+value = (sf.randn(42) + key * 10).alias("value")
+df = spark.range(0, 1000, 1, 1).select(key, value)
+df.select(
+    sf.approx_percentile("value", [0.25, 0.5, 0.75], accuracy=1000000)
+).show(truncate=False)
+
+
+# +----------------------------------------------------------+
+# |approx_percentile(value, array(0.25, 0.5, 0.75), 1000000) |
+# +----------------------------------------------------------+
+# |[0.7264430125286..., 9.98975299938..., 19.335304783039...]|
+# +----------------------------------------------------------+
+
+# accuracy is a positive numeric literal which controls approximation accuracy at the cost of memory. Higher value of accuracy yields better accuracy, 1.0/accuracy is the relative error of the approximation. (default: 10000).
+
+
 ```
 
 ### Summary Statistics
@@ -775,7 +796,7 @@ orders_df.groupBy("category").agg(
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     from_unixtime, unix_timestamp, to_timestamp, to_date, 
-    current_timestamp, current_date, col
+    current_timestamp, current_date, from_utc_timestamp,col
 )
 
 spark = SparkSession.builder.appName("DateTimeExample").getOrCreate()
@@ -877,6 +898,15 @@ df_with_current.select("event_id", "current_ts", "current_dt").show(truncate=Fal
 # |3       |2024-12-19 10:30:45.123|2024-12-19|
 # |4       |2024-12-19 10:30:45.123|2024-12-19|
 # +--------+-----------------------+----------+
+
+# from_utc_timestamp takes a timestamp which is timezone-agnostic, and interprets it as a timestamp in UTC, and renders that timestamp as a timestamp in the given time zone.
+
+import pyspark.sql.functions as sf
+df = spark.createDataFrame([('1997-02-28 10:30:00', 'JST')], ['ts', 'tz'])
+df.select('*', sf.from_utc_timestamp('ts', 'PST')).show()
+
+# tz is a string detailing the time zone ID that the input should be adjusted to. It should be in the format of either region-based zone IDs or zone offsets. Region IDs must have the form ‘area/city’, such as ‘America/Los_Angeles’
+
 ```
 
 ### Extracting Date Components
@@ -1040,8 +1070,9 @@ from pyspark.sql.functions import date_add, date_sub, datediff, months_between, 
 # Add days to date
 df = df.withColumn("future_date", date_add("date_column", 30))
 
-# Subtract days from date
+# Subtract days from date (Accepts negative value as well to calculate forward in time)
 df = df.withColumn("past_date", date_sub("date_column", 7))
+
 
 # Difference between dates (in days)
 df = df.withColumn("days_diff", datediff("end_date", "start_date"))
@@ -1528,14 +1559,19 @@ df.sort("age")
 # Sort descending
 df.orderBy(desc("age"))
 df.orderBy(col("age").desc())
+# Alternative using the 'ascending' parameter
+df.orderBy(["column_a", "column_b"], ascending=[True, False])
 
 # Sort by multiple columns
 df.orderBy("country", "age")
 df.orderBy(asc("country"), desc("age"))
+# Sort column_a ascending and column_b descending
+df.sort(col("column_a").asc(), col("column_b").desc())
 
 # Null handling in sorting
 df.orderBy(asc_nulls_first("age"))
 df.orderBy(asc_nulls_last("age"))
+
 ```
 
 ### Iterating Over DataFrames

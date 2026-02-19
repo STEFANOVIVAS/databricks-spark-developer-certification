@@ -13,7 +13,7 @@
 
 ## 1. Advantages and Challenges of Spark
 
-### Advantages ✓
+### Advantages :white_check_mark:
 
 **Speed and Performance**
 - **In-Memory Processing**: Spark processes data in-memory (RAM), making it up to 100x faster than MapReduce for certain workloads
@@ -742,7 +742,7 @@ df_filtered.write.parquet("output")  # Job 2
 #### 3. Stage
 - **Definition**: Groups of tasks that can be executed together to compute the same operation on multiple machines.
 - **Division**: Stages are divided by shuffle boundaries. Spark starts a new stage after each
-shuffle, and keeps track of what order the stages must run in to compute the final result (A shuffle represents a physical repartitioning of the data).Regardless of the number of partitions, that entire stage is computed in parallel. The final result aggregates those partitions individually, brings them all to a single partition before finally sending the final result to the driver.
+shuffle, and keeps track of what order the stages must run in to compute the final result (A shuffle represents a physical repartitioning of the data).Regardless of the number of partitions, that entire stage is computed in parallel. The final result aggregates those partitions individually, brings them all to a single partition before finally sending the final result to the driver.The total number of stages is the quantity of shuffle operations + 1.
 - **Contains**: Multiple tasks (one per partition)
 - **Types**:
   - **ShuffleMapStage**: Produces output for shuffle
@@ -1534,10 +1534,10 @@ ps.set_option('compute.default_index_type', 'distributed')
 │                  PANDAS API ON SPARK                        │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  ┌─────────────────┐     ┌─────────────────────────────┐   │
-│  │   Pandas API    │ ──► │   Spark Execution Engine    │   │
-│  │   (Familiar)    │     │   (Distributed Processing)  │   │
-│  └─────────────────┘     └─────────────────────────────┘   │
+│  ┌─────────────────┐     ┌─────────────────────────────┐    │
+│  │   Pandas API    │ ──► │   Spark Execution Engine    │    │
+│  │   (Familiar)    │     │   (Distributed Processing)  │    │
+│  └─────────────────┘     └─────────────────────────────┘    │
 │                                                             │
 │  ADVANTAGES:                                                │
 │  ✓ Familiar Pandas syntax                                   │

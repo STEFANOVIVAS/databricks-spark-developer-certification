@@ -19,7 +19,13 @@ df = spark.read \
     .option("user", "username") \
     .option("password", "password") \
     .option("driver", "org.postgresql.Driver") \
+    .option("partitionColumn", "c1")
+    .option("lowerBound", "1")
+    .option("upperBound", "100")
+    .option("numPartitions", "3")
     .load()
+
+# In PySpark, lowerBound and upperBound are used in conjunction with partitionColumn and numPartitions within a JDBC read (spark.read.jdbc) to parallelize the data ingestion from a relational database. Their primary purpose is to define the range of the partitionColumn for dividing the table into smaller, roughly equal-sized slices, allowing Spark to fetch data in parallel using multiple database connections.
 
 # With query instead of table
 df = spark.read \
@@ -517,6 +523,9 @@ df.createOrReplaceTempView("temp_view_name")
 
 # Query the view
 result = spark.sql("SELECT * FROM temp_view_name WHERE column > 100")
+
+# If you create two temporary views with the same name within the same Spark session, the second one will replace the first one. Spark's createOrReplaceTempView (or the equivalent SQL CREATE OR REPLACE TEMPORARY VIEW) operation is designed to update the view definition if a view with that name already exists.
+
 ```
 
 **Global Temporary View:**
