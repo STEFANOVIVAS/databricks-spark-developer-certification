@@ -44,7 +44,7 @@
 - **Structured Streaming**: Real-time stream processing
 - **GraphX**: Graph processing and analytics
 
-### Challenges ✗
+### Challenges :warning:
 
 **1. Cluster Configuration & Resource Management**
 - Sizing executors (memory, cores) appropriately is complex
